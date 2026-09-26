@@ -1,5 +1,7 @@
-pandas>=2.0
-numpy>=1.24
-scipy>=1.10
-matplotlib>=3.7
-streamlit>=1.32
+# Streamlit Cloud installs from THIS file and ignores pyproject.toml when both
+# are present (see build log: "Used: uv with requirements.txt"). "-e .[app]"
+# installs the local openftir package itself in editable mode, pulling in its
+# core deps (pandas/numpy/scipy/matplotlib) plus the "app" extra (streamlit),
+# both defined in pyproject.toml. Without this line, openftir is never
+# installed at all -> ModuleNotFoundError in app.py.
+-e .[app]
