@@ -3,12 +3,16 @@ Spectrum pre-processing: Savitzky-Golay smoothing + Asymmetric Least Squares
 (ALS) baseline correction. Runs BEFORE any detection strategy (rule-based
 FeatureSelector or DeconvolutionSelector) ever sees the spectrum.
 
-Design decision (carried over from the DeconvolutionSelector discussion):
-DeconvolutionSelector's Gaussian fit keeps its own linear baseline term
-(m*x + b) regardless of whether ALS runs here. ALS is a toggle the user can
-turn off in the sidebar; the linear term is cheap insurance for whatever
-residual slope ALS leaves behind (or the *only* baseline handling, if ALS
-is off). The two are not meant to be mutually exclusive.
+Savitzy-Golary smoothing method is a digital filter that can be applied to
+a set of digital data points for the purpose of smoothing the data, that is,
+to increase the precision of the data without distorting the signal tendency.
+It works in a process known as convolution, by fitting successive sub-sets of
+adjacent data points with a low-degree polynomial by the method of linear least squares.
+
+Asymmetric Least Squares (AsLS) baseline correction is a mathematical method 
+used to remove background drift or baseline noise from spectral and 
+chromatographic data while keeping analytical peaks intact. It uses 
+Whittaker Smoothing, i.e. penalised asymmetric weighing of resudials.
 """
 
 import numpy as np
@@ -31,12 +35,12 @@ class SpectrumPreprocessor:
                  smooth: bool = True,
                  sg_window: int = 15,
                  sg_polyorder: int = 3,
-                 baseline_correct: bool = False,
+                 baseline_correct: bool = True,
                  als_lam: float = 1e5,
                  als_p: float = 0.01,
                  als_niter: int = 10):
         if sg_window % 2 == 0:
-            raise ValueError("sg_window must be odd (Savitzky-Golay requires an odd window).")
+            raise ValueError("sg_window must be odd (because Savitzky-Golay requires an odd window).")
         if sg_polyorder >= sg_window:
             raise ValueError("sg_polyorder must be smaller than sg_window.")
 
