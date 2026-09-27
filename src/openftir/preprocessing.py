@@ -31,7 +31,7 @@ class SpectrumPreprocessor:
                  smooth: bool = True,
                  sg_window: int = 15,
                  sg_polyorder: int = 3,
-                 baseline_correct: bool = True,
+                 baseline_correct: bool = False,
                  als_lam: float = 1e5,
                  als_p: float = 0.01,
                  als_niter: int = 10):
