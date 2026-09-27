@@ -1,12 +1,19 @@
-"""Runs the FeatureSelector across all rules; returns detected hits only."""
+"""Runs a Selector across all rules; returns detected hits only."""
 
+from typing import Protocol
 import pandas as pd
 from .library import ReferenceLibrary
-from .selector import FeatureSelector
+from .models import PeakRule, WindowResult
+
+
+class Selector(Protocol):
+    """Structural type: anything with this method works — FeatureSelector,
+    DeconvolutionSelector, or any future selector, without inheritance."""
+    def extract(self, spectrum: pd.Series, rule: PeakRule) -> WindowResult: ...
 
 
 class FunctionalGroupClassifier:
-    def __init__(self, library: ReferenceLibrary, selector: FeatureSelector):
+    def __init__(self, library: ReferenceLibrary, selector: Selector):
         self.library  = library
         self.selector = selector
 

@@ -4,13 +4,13 @@ from typing import Optional
 import pandas as pd
 from .library import ReferenceLibrary
 from .selector import FeatureSelector
-from .classifier import FunctionalGroupClassifier
+from .classifier import FunctionalGroupClassifier, Selector
 from .preprocessing import SpectrumPreprocessor
 from .models import CompoundProfile
 
 
 class CompoundProfiler:
-    def __init__(self, library: ReferenceLibrary, selector: Optional[FeatureSelector] = None,
+    def __init__(self, library: ReferenceLibrary, selector: Optional[Selector] = None,
                  preprocessor: Optional[SpectrumPreprocessor] = None):
         self.library      = library
         self.selector     = selector or FeatureSelector()
