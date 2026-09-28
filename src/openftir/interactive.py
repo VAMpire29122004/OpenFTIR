@@ -49,6 +49,12 @@ TIER_COLORS = {
 }
 
 
+PEAK_COLUMNS = ["Cluster", "Include", "Peak (cm⁻¹)", "Group", "Class",
+                "Intensity", "Absorbance", "wn_low", "wn_high"]
+RESOLVED_COLUMNS = ["Include", "Peak (cm⁻¹)", "Group", "Class",
+                    "Intensity", "Absorbance", "wn_low", "wn_high"]
+
+
 def _to_display(ab, y_out: str):
     if y_out == "trans_pct":
         return 100.0 * (10.0 ** -ab)
@@ -101,7 +107,7 @@ def build_peaks_dataframe(clusters: list) -> pd.DataFrame:
                 "wn_low"       : p["wn_low"],
                 "wn_high"      : p["wn_high"],
             })
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, columns=PEAK_COLUMNS)
 
 
 def resolve_edited_peaks(edited_df: pd.DataFrame, spectrum: pd.Series,
@@ -152,8 +158,11 @@ def resolve_edited_peaks(edited_df: pd.DataFrame, spectrum: pd.Series,
             # CSV positions, so a synthetic rule still has a sane window.
             wn_low, wn_high = float(wn) - 5.0, float(wn) + 5.0
 
+        inc = row.get("Include")
+        include = True if (inc is None or pd.isna(inc)) else bool(inc)
+
         resolved_rows.append({
-            "Include"      : row.get("Include", True),
+            "Include"      : include,
             "Peak (cm⁻¹)"  : float(wn),
             "Group"        : row.get("Group", "") or "",
             "Class"        : cls,
@@ -162,7 +171,7 @@ def resolve_edited_peaks(edited_df: pd.DataFrame, spectrum: pd.Series,
             "wn_low"       : float(wn_low),
             "wn_high"      : float(wn_high),
         })
-    return pd.DataFrame(resolved_rows)
+    return pd.DataFrame(resolved_rows, columns=RESOLVED_COLUMNS)
 
 
 def resolved_peaks_to_window_results(resolved_df: pd.DataFrame) -> list:
@@ -284,7 +293,7 @@ def rebuild_figure_from_edits(sample_name: str, profiler: CompoundProfiler,
     display_y = _to_display(ab, y_out)
 
     resolved = resolve_edited_peaks(edited_peaks_df, spectrum, absorbance_mode)
-    kept = resolved[resolved["Include"]] if not resolved.empty else resolved
+    kept = resolved[resolved["Include"].astype(bool)] if not resolved.empty else resolved
 
     points = [{
         "wn"   : float(row["Peak (cm⁻¹)"]),
