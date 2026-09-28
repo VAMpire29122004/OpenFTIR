@@ -29,9 +29,6 @@ st.markdown(
         border-radius: 6px;
         padding: 8px;
     }
-    [data-testid="stPlotlyChart"] .main-svg {
-        background-color: #FFFFFF !important;
-    }
     </style>
     """,
     unsafe_allow_html=True,
