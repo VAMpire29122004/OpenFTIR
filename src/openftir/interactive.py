@@ -220,19 +220,33 @@ def _apply_layout(fig: go.Figure, sample_name: str, y_out: str):
         plot_bgcolor="#FFFFFF",
         font=dict(color="#111111"),
         hoverlabel=dict(bgcolor="#FFFFFF", font=dict(color="#111111")),
-        height=550,
+        height=600,
+        margin=dict(t=110),
         showlegend=False,
     )
 
 
 def _draw_clusters(fig: go.Figure, clusters: list, y_out: str):
-    for cluster in clusters:
+    """
+    One marker + one compact label per cluster. The on-plot label shows only
+    the strongest candidate and a count ("aliphatic ether +4"); the FULL
+    candidate list lives in the hover tooltip. Long merged names used to pile
+    on top of each other and bury the spectrum. Label heights are staggered
+    across three levels (left to right) so neighbours don't share a row.
+    """
+    ordered = sorted(clusters, key=lambda cl: sum(p["wn"] for p in cl) / len(cl))
+    for i, cluster in enumerate(ordered):
         color = TIER_COLORS.get(cluster_tier(cluster), "#888888")
         rep_wn = sum(p["wn"] for p in cluster) / len(cluster)
         rep_abs = max(p["abs"] for p in cluster)
         rep_display_y = _to_display(rep_abs, y_out)
         is_ambiguous = len(cluster) > 1
-        label = cluster_label(cluster)
+
+        top = max(cluster, key=lambda p: p["abs"])["cls"]
+        n_other = len({p["cls"] for p in cluster}) - 1
+        short = top + (f" +{n_other}" if n_other > 0 else "")
+        full = cluster_label(cluster, max_names=50).replace(" / ", "<br>• ")
+        full = "• " + full if is_ambiguous else full
 
         fig.add_trace(go.Scatter(
             x=[rep_wn], y=[rep_display_y],
@@ -240,17 +254,17 @@ def _draw_clusters(fig: go.Figure, clusters: list, y_out: str):
             marker=dict(color=color, size=9 if is_ambiguous else 8,
                         symbol="diamond-open" if is_ambiguous else "circle-open",
                         line=dict(width=2)),
-            hovertemplate=f"{label}<br>%{{x:.0f}} cm⁻¹<extra></extra>",
+            hovertemplate=f"{full}<br>%{{x:.0f}} cm⁻¹<extra></extra>",
             showlegend=False,
         ))
         fig.add_annotation(
             x=rep_wn, y=rep_display_y,
-            text=f"{label}<br>{rep_wn:.0f} cm⁻¹",
+            text=f"{short}<br>{rep_wn:.0f} cm⁻¹",
             showarrow=True, arrowhead=2, arrowsize=0.8, arrowcolor=color,
             font=dict(size=10, color=color),
-            bgcolor="white", bordercolor=color,
+            bgcolor="#FFFFFF", bordercolor=color,
             borderwidth=2 if is_ambiguous else 1,
-            ax=0, ay=-40,
+            ax=0, ay=-40 - 32 * (i % 3),
         )
 
 

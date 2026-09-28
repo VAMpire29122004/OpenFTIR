@@ -16,6 +16,23 @@ from openftir.interactive import (
     resolved_peaks_to_window_results,
 )
 
+
+def force_light(fig):
+    """Explicit light colors on every element Streamlit's dark theme would
+    otherwise recolor (background, text, grid, axes, hover). Applied here in
+    addition to interactive.py so the chart is readable regardless of theme."""
+    axis = dict(color="#111111", gridcolor="#e0e0e0", zerolinecolor="#cccccc",
+                linecolor="#333333", tickcolor="#333333", showline=True)
+    fig.update_layout(
+        paper_bgcolor="#FFFFFF", plot_bgcolor="#FFFFFF",
+        font=dict(color="#111111"),
+        title=dict(font=dict(color="#111111")),
+        hoverlabel=dict(bgcolor="#FFFFFF", font=dict(color="#111111")),
+        xaxis=axis, yaxis=axis,
+    )
+    return fig
+
+
 st.set_page_config(page_title="OpenFTIR", page_icon="🔬", layout="wide")
 st.title("🔬 OpenFTIR: Context-Aware Spectrum Analyzer")
 
@@ -176,7 +193,8 @@ if spectra_file and ref_file:
             fig = rebuild_figure_from_edits(selected_sample, profiler, edited,
                                             y_out=y_out, absorbance_mode=abs_mode)
             with plot_area:
-                st.plotly_chart(fig, width="stretch", theme=None, config={"displaylogo": False})
+                st.plotly_chart(force_light(fig), width="stretch", theme=None,
+                                config={"displaylogo": False})
 
             # ---- Publication export: renders the EDITED table, not a fresh detection ----
             st.markdown("#### Publication figure")
