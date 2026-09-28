@@ -204,6 +204,26 @@ def resolved_peaks_to_window_results(resolved_df: pd.DataFrame) -> list:
     return results
 
 
+def _apply_layout(fig: go.Figure, sample_name: str, y_out: str):
+    """Shared layout. Background is forced white (paper + plot area + black
+    text) so the chart looks the same regardless of the viewer's light/dark
+    theme -- pair with st.plotly_chart(theme=None), otherwise Streamlit's own
+    theme overrides these colors."""
+    axis_style = dict(showline=True, linecolor="#333333", gridcolor="#e6e6e6",
+                      zerolinecolor="#e6e6e6", color="#111111")
+    fig.update_layout(
+        xaxis=dict(title="Wavenumber (cm⁻¹)", autorange="reversed", **axis_style),
+        yaxis=dict(title=_ylabel_for(y_out), **axis_style),
+        title=f"ATR-FTIR Spectrum — {sample_name}",
+        template="plotly_white",
+        paper_bgcolor="white",
+        plot_bgcolor="white",
+        font=dict(color="#111111"),
+        height=550,
+        showlegend=False,
+    )
+
+
 def _draw_clusters(fig: go.Figure, clusters: list, y_out: str):
     for cluster in clusters:
         color = TIER_COLORS.get(cluster_tier(cluster), "#888888")
@@ -264,14 +284,7 @@ def build_interactive_plot(sample_name: str, profiler: CompoundProfiler,
 
     _draw_clusters(fig, top_clusters, y_out)
 
-    fig.update_layout(
-        xaxis=dict(title="Wavenumber (cm⁻¹)", autorange="reversed"),
-        yaxis=dict(title=_ylabel_for(y_out)),
-        title=f"ATR-FTIR Spectrum — {sample_name}",
-        template="plotly_white",
-        height=550,
-        showlegend=False,
-    )
+    _apply_layout(fig, sample_name, y_out)
 
     return fig, peaks_df
 
@@ -315,12 +328,5 @@ def rebuild_figure_from_edits(sample_name: str, profiler: CompoundProfiler,
 
     _draw_clusters(fig, clusters, y_out)
 
-    fig.update_layout(
-        xaxis=dict(title="Wavenumber (cm⁻¹)", autorange="reversed"),
-        yaxis=dict(title=_ylabel_for(y_out)),
-        title=f"ATR-FTIR Spectrum — {sample_name}",
-        template="plotly_white",
-        height=550,
-        showlegend=False,
-    )
+    _apply_layout(fig, sample_name, y_out)
     return fig

@@ -161,7 +161,7 @@ if spectra_file and ref_file:
             fig = rebuild_figure_from_edits(selected_sample, profiler, edited,
                                             y_out=y_out, absorbance_mode=abs_mode)
             with plot_area:
-                st.plotly_chart(fig, width="stretch", config={"displaylogo": False})
+                st.plotly_chart(fig, width="stretch", theme=None, config={"displaylogo": False})
 
             # ---- Publication export: renders the EDITED table, not a fresh detection ----
             st.markdown("#### Publication figure")
