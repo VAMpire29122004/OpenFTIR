@@ -37,6 +37,7 @@ import plotly.graph_objects as go
 
 from .profiler import CompoundProfiler
 from .models import WindowResult
+from .clustering import cluster_points, cluster_label, cluster_tier
 
 TIER_COLORS = {
     "very_strong": "#d62728",
@@ -46,10 +47,6 @@ TIER_COLORS = {
     "manual"     : "#e377c2",  # distinct from detection tiers — flags
                                 # peaks the user added by hand
 }
-
-# Priority order for picking a cluster's marker color when its members span
-# multiple tiers — highest-confidence tier wins the color.
-_TIER_PRIORITY = ["very_strong", "strong", "medium", "weak", "manual"]
 
 
 def _to_display(ab, y_out: str):
@@ -70,47 +67,14 @@ def _ylabel_for(y_out: str) -> str:
 
 def _hit_to_point(h: WindowResult) -> dict:
     return {
-        "wn"   : h.peak_wavenumber,
-        "abs"  : h.peak_absorbance,
-        "cls"  : h.rule.compound_class,
-        "group": h.rule.group,
-        "tier" : h.rule.intensity_tier,
+        "wn"     : h.peak_wavenumber,
+        "abs"    : h.peak_absorbance,
+        "cls"    : h.rule.compound_class,
+        "group"  : h.rule.group,
+        "tier"   : h.rule.intensity_tier,
+        "wn_low" : h.rule.wn_low,
+        "wn_high": h.rule.wn_high,
     }
-
-
-def _cluster_points(points: list, min_dist: float = 30.0) -> list:
-    """
-    Groups points whose wavenumbers fall within min_dist of their cluster's
-    FIRST (lowest-wavenumber) member — anchored, not chained, so every
-    cluster's total span is guaranteed < min_dist. See module docstring for
-    why chaining was rejected (unbounded cluster width on real data).
-    """
-    if not points:
-        return []
-    ordered = sorted(points, key=lambda p: p["wn"])
-    clusters = [[ordered[0]]]
-    for p in ordered[1:]:
-        anchor = clusters[-1][0]["wn"]
-        if p["wn"] - anchor < min_dist:
-            clusters[-1].append(p)
-        else:
-            clusters.append([p])
-    return clusters
-
-
-def _cluster_label(cluster: list, max_names: int = 4) -> str:
-    names = sorted({p["cls"] for p in cluster})
-    if len(names) > max_names:
-        return ", ".join(names[:max_names]) + f" (+{len(names) - max_names} more)"
-    return " / ".join(names)
-
-
-def _cluster_color(cluster: list) -> str:
-    tiers_present = {p["tier"] for p in cluster}
-    for tier in _TIER_PRIORITY:
-        if tier in tiers_present:
-            return TIER_COLORS.get(tier, "#888888")
-    return "#888888"
 
 
 def build_peaks_dataframe(clusters: list) -> pd.DataFrame:
@@ -134,6 +98,8 @@ def build_peaks_dataframe(clusters: list) -> pd.DataFrame:
                 "Class"        : p["cls"],
                 "Intensity"    : p["tier"],
                 "Absorbance"   : round(p["abs"], 4),
+                "wn_low"       : p["wn_low"],
+                "wn_high"      : p["wn_high"],
             })
     return pd.DataFrame(rows)
 
@@ -178,6 +144,14 @@ def resolve_edited_peaks(edited_df: pd.DataFrame, spectrum: pd.Series,
         if not tier or (isinstance(tier, float) and pd.isna(tier)):
             tier = "manual"
 
+        wn_low = row.get("wn_low")
+        wn_high = row.get("wn_high")
+        if pd.isna(wn_low) or pd.isna(wn_high):
+            # Manually-added row (or bounds lost in the edit round-trip) --
+            # same ±5 cm-1 convention ReferenceLibrary uses for single-value
+            # CSV positions, so a synthetic rule still has a sane window.
+            wn_low, wn_high = float(wn) - 5.0, float(wn) + 5.0
+
         resolved_rows.append({
             "Include"      : row.get("Include", True),
             "Peak (cm⁻¹)"  : float(wn),
@@ -185,18 +159,50 @@ def resolve_edited_peaks(edited_df: pd.DataFrame, spectrum: pd.Series,
             "Class"        : cls,
             "Intensity"    : tier,
             "Absorbance"   : float(abs_val),
+            "wn_low"       : float(wn_low),
+            "wn_high"      : float(wn_high),
         })
     return pd.DataFrame(resolved_rows)
 
 
+def resolved_peaks_to_window_results(resolved_df: pd.DataFrame) -> list:
+    """
+    Converts a resolved (post-edit) peaks table back into real WindowResult
+    objects, so plotting.py's static export can render the researcher's
+    edited peak list instead of running detection again. Each row gets a
+    synthetic PeakRule built directly from its own data — peak_details is
+    set to the tier keyword itself (e.g. "very_strong"), which works because
+    PeakRule.intensity_tier normalizes underscore vs. space (see models.py).
+    """
+    from .models import PeakRule, WindowResult
+
+    results = []
+    for _, row in resolved_df.iterrows():
+        rule = PeakRule(
+            wn_low=float(row["wn_low"]),
+            wn_high=float(row["wn_high"]),
+            group=row.get("Group", "") or "",
+            compound_class=row["Class"],
+            peak_details=row["Intensity"],
+        )
+        results.append(WindowResult(
+            rule=rule,
+            peak_absorbance=float(row["Absorbance"]),
+            mean_absorbance=float(row["Absorbance"]),  # not tracked post-edit; peak value is the only one that matters for rendering
+            peak_wavenumber=float(row["Peak (cm⁻¹)"]),
+            detected=True,  # by definition -- these are the rows the researcher kept
+        ))
+    return results
+
+
 def _draw_clusters(fig: go.Figure, clusters: list, y_out: str):
     for cluster in clusters:
-        color = _cluster_color(cluster)
+        color = TIER_COLORS.get(cluster_tier(cluster), "#888888")
         rep_wn = sum(p["wn"] for p in cluster) / len(cluster)
         rep_abs = max(p["abs"] for p in cluster)
         rep_display_y = _to_display(rep_abs, y_out)
         is_ambiguous = len(cluster) > 1
-        label = _cluster_label(cluster)
+        label = cluster_label(cluster)
 
         fig.add_trace(go.Scatter(
             x=[rep_wn], y=[rep_display_y],
@@ -233,7 +239,7 @@ def build_interactive_plot(sample_name: str, profiler: CompoundProfiler,
 
     hits: list = profiler.classifier.classify(spectrum)
     points = [_hit_to_point(h) for h in hits]
-    clusters = _cluster_points(points, min_dist=cluster_dist)
+    clusters = cluster_points(points, min_dist=cluster_dist)
     clusters.sort(key=lambda c: max(p["abs"] for p in c), reverse=True)
     top_clusters = clusters[:max_labels]
 
@@ -288,7 +294,7 @@ def rebuild_figure_from_edits(sample_name: str, profiler: CompoundProfiler,
         "tier" : row["Intensity"],
     } for _, row in kept.iterrows()]
 
-    clusters = _cluster_points(points, min_dist=cluster_dist)
+    clusters = cluster_points(points, min_dist=cluster_dist)
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(

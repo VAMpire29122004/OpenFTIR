@@ -17,7 +17,16 @@ class PeakRule:
 
     @property
     def intensity_tier(self) -> str:
-        d = self.peak_details.lower()
+        # Normalized so this works whether peak_details is natural-language
+        # CSV text ("strong, sharp") OR an already-computed tier keyword
+        # ("very_strong") -- the latter is needed when reconstructing a
+        # PeakRule from edited/resolved peak data (see interactive.py).
+        # Without the underscore->space normalization, "very_strong" would
+        # fail the "very strong" check and silently fall through to match
+        # "strong" instead (it's a substring of "very_strong").
+        d = self.peak_details.lower().replace("_", " ")
+        if "manual" in d:
+            return "manual"
         if "very strong" in d:
             return "very_strong"
         if "strong" in d:

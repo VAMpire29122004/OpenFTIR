@@ -25,7 +25,8 @@ from matplotlib import rcParams
 from .library import ReferenceLibrary
 from .selector import FeatureSelector
 from .classifier import FunctionalGroupClassifier
-from .models import WindowResult
+from .models import PeakRule, WindowResult
+from .clustering import cluster_points, cluster_label, cluster_tier
 
 # ── Publication font settings ──────────────────────────────────────────────
 rcParams.update({
@@ -58,6 +59,8 @@ REGION_COLORS = {
     "strong"     : "#ff7f0e",
     "medium"     : "#2ca02c",
     "weak"       : "#9467bd",
+    "manual"     : "#e377c2",  # matches interactive.py's TIER_COLORS —
+                                # researcher-added peaks, not algorithm hits
 }
 
 COMPARE_PALETTE = [
@@ -140,6 +143,42 @@ def _detect(spectrum: pd.Series, library: ReferenceLibrary,
     return kept
 
 
+def _hit_to_point(h: WindowResult) -> dict:
+    return {
+        "wn"     : h.peak_wavenumber,
+        "abs"    : h.peak_absorbance,
+        "cls"    : h.rule.compound_class,
+        "group"  : h.rule.group,
+        "tier"   : h.rule.intensity_tier,
+        "wn_low" : h.rule.wn_low,
+        "wn_high": h.rule.wn_high,
+    }
+
+
+def _merge_cluster(cluster: list) -> WindowResult:
+    """
+    Collapses a cluster of overlapping hits into one WindowResult with a
+    combined label — same shared clustering module interactive.py uses, so
+    a researcher's edited peak list renders identically here as it did in
+    the Plotly preview they approved, rather than regressing to one arrow
+    per candidate (the crowding problem clustering was built to fix).
+    """
+    wn_low  = min(p["wn_low"] for p in cluster)
+    wn_high = max(p["wn_high"] for p in cluster)
+    rep_wn  = sum(p["wn"] for p in cluster) / len(cluster)
+    rep_abs = max(p["abs"] for p in cluster)
+    top_member = max(cluster, key=lambda p: p["abs"])
+
+    rule = PeakRule(
+        wn_low=wn_low, wn_high=wn_high,
+        group=top_member["group"],
+        compound_class=cluster_label(cluster),
+        peak_details=cluster_tier(cluster),
+    )
+    return WindowResult(rule=rule, peak_absorbance=rep_abs, mean_absorbance=rep_abs,
+                         peak_wavenumber=rep_wn, detected=True)
+
+
 def _short_label(hit: WindowResult) -> str:
     """Two-line label: class on top, abbreviated vibration mode below."""
     abbr = (hit.rule.group
@@ -196,18 +235,35 @@ def _resolve_label_positions(hits: list, y_base: float, y_step: float,
 
 # ── Single-sample publication plot ──────────────────────────────────────────
 
-def plot_single(sample_name: str, df: pd.DataFrame, library: ReferenceLibrary,
+def plot_single(sample_name: str, df: pd.DataFrame, library: ReferenceLibrary = None,
                  selector: FeatureSelector = None, out_path: str = None,
-                 max_labels: int = 12, title: str = None, y_out: str = "abs"):
-    selector = selector or FeatureSelector()
-
+                 max_labels: int = 12, title: str = None, y_out: str = "abs",
+                 hits_override: list = None):
+    """
+    hits_override: when provided (a list of WindowResult, e.g. from
+    interactive.resolved_peaks_to_window_results()), detection is skipped
+    entirely and this exact peak list is rendered -- library/selector become
+    unused in that case. This is what lets the publication PNG reflect a
+    researcher's edits from the interactive editor rather than re-running
+    detection from scratch. library is still required when hits_override is
+    None (the normal CLI/notebook path).
+    """
     spectrum = df.loc[sample_name].sort_index(ascending=False)
     spectrum.index = spectrum.index.astype(float)
     wn = spectrum.index.values.astype(float)
     ab = spectrum.values.astype(float)  # always absorbance internally
 
-    hits = _detect(spectrum, library, selector)
-    top  = hits[:max_labels]
+    if hits_override is not None:
+        points = [_hit_to_point(h) for h in hits_override]
+        clusters = cluster_points(points, min_dist=30.0)  # matches interactive.py's default
+        merged_hits = [_merge_cluster(c) for c in clusters]
+        top = sorted(merged_hits, key=lambda w: w.peak_absorbance, reverse=True)[:max_labels]
+    else:
+        if library is None:
+            raise ValueError("library is required when hits_override is not provided.")
+        selector = selector or FeatureSelector()
+        hits = _detect(spectrum, library, selector)
+        top  = hits[:max_labels]
 
     display_y = _to_display(ab, y_out)
     ylabel    = _ylabel_for(y_out)
@@ -225,7 +281,7 @@ def plot_single(sample_name: str, df: pd.DataFrame, library: ReferenceLibrary,
         if key in seen:
             continue
         seen.add(key)
-        c = REGION_COLORS[h.rule.intensity_tier]
+        c = REGION_COLORS.get(h.rule.intensity_tier, "#888888")
         ax.axvspan(h.rule.wn_low, h.rule.wn_high, alpha=0.10, color=c, zorder=1)
         ax.axvline(h.peak_wavenumber, color=c, linewidth=0.5,
                    alpha=0.55, linestyle="--", zorder=2)
@@ -241,7 +297,7 @@ def plot_single(sample_name: str, df: pd.DataFrame, library: ReferenceLibrary,
 
     for lp in label_positions:
         h = lp["hit"]
-        color = REGION_COLORS[h.rule.intensity_tier]
+        color = REGION_COLORS.get(h.rule.intensity_tier, "#888888")
         peak_display_y = _to_display(h.peak_absorbance, y_out)
 
         ax.annotate(
@@ -265,7 +321,7 @@ def plot_single(sample_name: str, df: pd.DataFrame, library: ReferenceLibrary,
 
     legend_patches = [
         mpatches.Patch(facecolor=REGION_COLORS[t], alpha=0.7, label=t.replace("_", " ").title())
-        for t in ["very_strong", "strong", "medium", "weak"]
+        for t in ["very_strong", "strong", "medium", "weak", "manual"]
         if any(h.rule.intensity_tier == t for h in top)
     ]
     if legend_patches:
