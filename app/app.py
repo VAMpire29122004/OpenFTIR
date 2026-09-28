@@ -19,6 +19,24 @@ from openftir.interactive import (
 st.set_page_config(page_title="OpenFTIR", page_icon="🔬", layout="wide")
 st.title("🔬 OpenFTIR: Context-Aware Spectrum Analyzer")
 
+# Solid, opaque white behind every Plotly chart -- independent of the viewer's
+# light/dark theme, so the plot can never look transparent or washed out.
+st.markdown(
+    """
+    <style>
+    [data-testid="stPlotlyChart"] {
+        background-color: #FFFFFF !important;
+        border-radius: 6px;
+        padding: 8px;
+    }
+    [data-testid="stPlotlyChart"] .main-svg {
+        background-color: #FFFFFF !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # --- Sidebar: Data Upload ---
 st.sidebar.header("1. Data Upload")
 spectra_file = st.sidebar.file_uploader("Upload Spectra CSV", type=["csv"])

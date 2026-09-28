@@ -216,9 +216,10 @@ def _apply_layout(fig: go.Figure, sample_name: str, y_out: str):
         yaxis=dict(title=_ylabel_for(y_out), **axis_style),
         title=f"ATR-FTIR Spectrum — {sample_name}",
         template="plotly_white",
-        paper_bgcolor="white",
-        plot_bgcolor="white",
+        paper_bgcolor="#FFFFFF",
+        plot_bgcolor="#FFFFFF",
         font=dict(color="#111111"),
+        hoverlabel=dict(bgcolor="#FFFFFF", font=dict(color="#111111")),
         height=550,
         showlegend=False,
     )
