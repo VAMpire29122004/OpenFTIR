@@ -164,7 +164,20 @@ class DeconvolutionSelector:
                 peak_abs = float(y[target_peak_idx])
                 peak_wn  = float(x[target_peak_idx])
             else:
-                peak_abs, peak_wn = best_amp, best_ctr
+                # `best_amp` is only the Gaussian component's own amplitude --
+                # it excludes the fitted baseline (m*x + b) sitting under it,
+                # so it is NOT the same quantity as a raw spectrum value at
+                # that point. The plotted curve, the intensity thresholds, and
+                # every other selector all deal in total absorbance (baseline
+                # included), so reporting amplitude alone here places the
+                # marker below the actual curve -- confirmed on real data:
+                # reported 0.088 A where the curve (and total model) sit at
+                # ~0.176 A. peak_wn is still chosen by comparing amplitudes
+                # (a fair way to pick the dominant component), but what gets
+                # RETURNED is the full model height at that center.
+                m, b = popt[0], popt[1]
+                peak_abs = float(best_amp + m * best_ctr + b)
+                peak_wn  = best_ctr
 
         except (RuntimeError, ValueError):
             target_peak_idx = valid_peaks[np.argmax(y[valid_peaks])]
