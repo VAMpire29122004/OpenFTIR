@@ -137,13 +137,34 @@ class DeconvolutionSelector:
                     p0=guess, bounds=(bounds_lower, bounds_upper), maxfev=2500,
                 )
 
+            # BOUND-PINNING CHECK: a component whose fitted center sits at the
+            # very edge of the +-15 cm-1 window curve_fit was allowed to search
+            # never actually converged on a real feature -- it just got pushed
+            # to the wall. Trusting it can report a fabricated amplitude (seen
+            # on real data: 0.48 A reported where the true spectrum peaks at
+            # ~0.10 A in that region). Only accept components whose center
+            # landed strictly inside its own search bounds.
+            CENTER_PIN_TOL = 0.5  # cm-1
+
             best_amp, best_ctr = 0.0, rule.wn_low
             for i in range(2, len(popt), 3):
                 amp, ctr, _ = popt[i:i + 3]
+                ctr_lo, ctr_hi = bounds_lower[i + 1], bounds_upper[i + 1]
+                pinned = (ctr - ctr_lo < CENTER_PIN_TOL) or (ctr_hi - ctr < CENTER_PIN_TOL)
+                if pinned:
+                    continue
                 if rule.wn_low <= ctr <= rule.wn_high and amp > best_amp:
                     best_amp, best_ctr = amp, ctr
 
-            peak_abs, peak_wn = best_amp, best_ctr
+            if best_amp == 0.0:
+                # Every in-window component was pinned (or none existed) --
+                # the fit gave nothing trustworthy. Fall back to the real
+                # topological peak rather than reporting the unreliable value.
+                target_peak_idx = valid_peaks[np.argmax(y[valid_peaks])]
+                peak_abs = float(y[target_peak_idx])
+                peak_wn  = float(x[target_peak_idx])
+            else:
+                peak_abs, peak_wn = best_amp, best_ctr
 
         except (RuntimeError, ValueError):
             target_peak_idx = valid_peaks[np.argmax(y[valid_peaks])]
