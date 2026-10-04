@@ -1,8 +1,6 @@
 # OpenFTIR
 An attempt to leverage Data Analytics and Polymer Science intersection to create a platform for faster FTIR spectrum analysis, thus making a Context-Aware Spectrum Analyzer and Elevating materials informatics through open-source, publication-quality spectral analysis.
 
-## Version 1
-
 ### Overview 
 
 OpenFTIR takes raw ATR-FTIR absorbance spectra and a reference peak-assignment library, and returns a structured, per-sample functional-group profile — no manual peak-picking required. It's built for polymer scientists who need to screen many spectra against known band assignments (C=O stretching, N–H bending, aromatic ring modes, etc.) without re-deriving thresholds by eye each time.
