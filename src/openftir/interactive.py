@@ -237,8 +237,14 @@ def _draw_clusters(fig: go.Figure, clusters: list, y_out: str):
     ordered = sorted(clusters, key=lambda cl: sum(p["wn"] for p in cl) / len(cl))
     for i, cluster in enumerate(ordered):
         color = TIER_COLORS.get(cluster_tier(cluster), "#888888")
-        rep_wn = sum(p["wn"] for p in cluster) / len(cluster)
-        rep_abs = max(p["abs"] for p in cluster)
+        # Anchor to the top (highest-absorbance) member's OWN real position --
+        # NOT mean-wn blended with max-abs across different members, which can
+        # synthesize a point that sits nowhere on the actual curve if members
+        # disagree on wavenumber. The top member is already a validated real
+        # detection; its own point is guaranteed to be on the curve.
+        top_member = max(cluster, key=lambda p: p["abs"])
+        rep_wn = top_member["wn"]
+        rep_abs = top_member["abs"]
         rep_display_y = _to_display(rep_abs, y_out)
         is_ambiguous = len(cluster) > 1
 
