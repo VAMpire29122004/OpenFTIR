@@ -165,9 +165,12 @@ def _merge_cluster(cluster: list) -> WindowResult:
     """
     wn_low  = min(p["wn_low"] for p in cluster)
     wn_high = max(p["wn_high"] for p in cluster)
-    rep_wn  = sum(p["wn"] for p in cluster) / len(cluster)
-    rep_abs = max(p["abs"] for p in cluster)
+    # Anchor to the top member's OWN real (wn, abs) pair -- same rule as
+    # interactive.py. Blending mean-wn with max-abs across different members
+    # can produce a point that sits nowhere on the actual curve.
     top_member = max(cluster, key=lambda p: p["abs"])
+    rep_wn  = top_member["wn"]
+    rep_abs = top_member["abs"]
 
     rule = PeakRule(
         wn_low=wn_low, wn_high=wn_high,
